@@ -1,10 +1,7 @@
-import asyncio
 import json
-import threading
 import time
-import urllib.parse
-import urllib.request
 from copy import deepcopy
+from fastapi.middleware.cors import CORSMiddleware
 import requests
 import uvicorn
 from fastapi import FastAPI
@@ -12,8 +9,6 @@ from starlette.responses import HTMLResponse
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from src.realtime_data_broadcast import RealTimeDataBroadcast
-import websockets
-
 
 app = FastAPI()
 
@@ -51,6 +46,7 @@ html = """
 </html>
 """
 amb_1 = [
+    ("23.03845585528855", "72.49577776125517"),
     ("23.03572650409564", "72.49419836801214"),
     ("23.03658130138197", "72.49474573600173"),
     ("23.037191867552142", "72.49516040872112"),
@@ -92,6 +88,7 @@ amb_1 = [
     ("23.059095637532124", "72.5171226785895")
 ]
 
+
 @app.get("/")
 async def get():
     return HTMLResponse(html)
@@ -122,9 +119,11 @@ async def set_patient_loc(lat: str, long: str, amb_id: int, init_lat: str, init_
         print("here")
         if amb_id == 1:
             track = deepcopy(amb_1)
+            time.sleep(5)
             while len(track):
+                print("iterating")
                 t = track.pop()
-                time.sleep(2.5)
+                time.sleep(5)
                 data = {
                     "type": 0,
                     "current_lat": t[0],
@@ -135,19 +134,61 @@ async def set_patient_loc(lat: str, long: str, amb_id: int, init_lat: str, init_
                 payload = json.dumps(data)
                 await notifier.push(payload)
 
-                # url = f"http://localhost:10001/track_live_location?lat={t[0]}&long={t[1]}&user_id=1&amb_id=1"
-                # response = requests.get(url).json()
-                #
-                # if len(response['numbers_to_notify']) > 0:
-                #     data = {
-                #         "type": 0,
-                #         "current_lat": t[0],
-                #         "current_lng": t[1],
-                #         "amb_id": amb_id,
-                #         "message": response['numbers_to_notify']
-                #     }
-                #     payload = json.dumps(data)
-                #     await notifier.push(payload)
+                try:
+                    url = f"http://localhost:10001/track_live_location?lat={t[0]}&long={t[1]}&user_id=1&amb_id=1"
+                    response = requests.get(url).json()
+                    if isinstance(response, str):
+                        response = eval(response)
+                    if response:
+                        if len(response['numbers_to_notify']) > 0:
+                            data = {
+                                "type": 0,
+                                "current_lat": t[0],
+                                "current_lng": t[1],
+                                "amb_id": amb_id,
+                                "message": response['numbers_to_notify']
+                            }
+                            payload = json.dumps(data)
+                            await notifier.push(payload)
+                except Exception as e:
+                    pass
+
+            # Going back to hospital
+            print("Iteration 2 started")
+            track2 = deepcopy(amb_1)
+            track2.reverse()
+            while len(track2):
+                print("iterating")
+                t = track.pop()
+                time.sleep(5)
+                data = {
+                    "type": 1,
+                    "current_lat": t[0],
+                    "current_lng": t[1],
+                    "amb_id": amb_id,
+                    "message": None
+                }
+                payload = json.dumps(data)
+                await notifier.push(payload)
+
+                try:
+                    url = f"http://localhost:10001/track_live_location?lat={t[0]}&long={t[1]}&user_id=1&amb_id=1"
+                    response = requests.get(url).json()
+                    if isinstance(response, str):
+                        response = eval(response)
+                    if response:
+                        if len(response['numbers_to_notify']) > 0:
+                            data = {
+                                "type": 0,
+                                "current_lat": t[0],
+                                "current_lng": t[1],
+                                "amb_id": amb_id,
+                                "message": response['numbers_to_notify']
+                            }
+                            payload = json.dumps(data)
+                            await notifier.push(payload)
+                except Exception as e:
+                    pass
         # threading.Thread(target=thread_wc, args=(int(amb_id)))
 
         return True
@@ -172,6 +213,15 @@ def thread_wc(amb_id: int):
 
     except Exception as e:
         raise e
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
 
 @app.on_event("startup")
