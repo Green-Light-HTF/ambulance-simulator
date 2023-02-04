@@ -29,6 +29,7 @@ class RealTimeDataBroadcast:
             # Looping like this is necessary in case a disconnection is handled
             # during await websocket.send_text(message)
             websocket = self.connections.pop()
+            print("Sending : ", message)
             await websocket.send_text(message)
             living_connections.append(websocket)
         self.connections = living_connections
