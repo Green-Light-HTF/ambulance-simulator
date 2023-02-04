@@ -25,7 +25,7 @@ class RealTimeDataBroadcast:
 
     async def _notify(self, message: str):
         living_connections = []
-        while len(self.connections) > 0:
+        if len(self.connections) > 0:
             # Looping like this is necessary in case a disconnection is handled
             # during await websocket.send_text(message)
             websocket = self.connections.pop()
